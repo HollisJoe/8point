@@ -11,10 +11,12 @@
 #define CATCH_CONFIG_MAIN
 #include "catch.hpp"
 
-#include <Eigen/Core>
-#include <Eigen/Geometry>
-#include <Eigen/Eigenvalues> 
-#include <Eigen/SVD>
+
+#include <eight/fundamental.h>
+#include <eight/normalize.h>
+#include <eight/distance.h>
+#include "utils.h"
+
 
 #include <opencv2/opencv.hpp>
 #include <opencv2/core/eigen.hpp>
@@ -23,76 +25,15 @@
 // "In defence of the eight point algorithm"
 
 
-Eigen::Matrix3d estimateFundamentalMatrixEightPoint(Eigen::Ref<const Eigen::MatrixXd> a, Eigen::Ref<const Eigen::MatrixXd> b)
-{
-    // Setup system of equations Ax = 0. There will be one row in A for each correspondence.
-    eigen_assert(a.cols() == b.cols());
-    eigen_assert(a.rows() == b.rows());
-
-    Eigen::Matrix<double, Eigen::Dynamic, 9> A(a.cols(), 9);
-
-    for (Eigen::DenseIndex i = 0; i < a.cols(); ++i) {
-        const auto &ca = a.col(i);
-        const auto &cb = b.col(i);
-        
-        auto &r = A.row(i);
-
-        r(0) = ca.x() * cb.x();     // F11
-        r(1) = ca.x() * cb.y();     // F21
-        r(2) = ca.x();              // F31
-        r(3) = ca.y() * cb.x();     // F12
-        r(4) = ca.y() * cb.y();     // F22
-        r(5) = ca.y();              // F32
-        r(6) = cb.x();              // F13
-        r(7) = cb.y();              // F23
-        r(8) = 1.0;                 // F33
-    }
-
-    // Seek for a least squares solution such that |Ax| = 1. Given by the unit eigenvector of A'A associated with the smallest eigenvalue.
-    Eigen::SelfAdjointEigenSolver< Eigen::Matrix<double, Eigen::Dynamic, 9> > e;
-    e.compute((A.transpose() * A));
-    eigen_assert(e.info() == Eigen::Success);
-
-    Eigen::Matrix<double, 1, 9> f = e.eigenvectors().col(0); // Sorted ascending by eigenvalue.
-
-    Eigen::Matrix3d F;
-    F <<
-        f(0), f(3), f(6),
-        f(1), f(4), f(7),
-        f(2), f(5), f(8);
-
-    // Enforce singularity constraint such that rank(F) = 2. Which is the closest singular matrix to F under Frobenius norm.
-    Eigen::JacobiSVD<Eigen::Matrix3d> svd(F, Eigen::ComputeThinU | Eigen::ComputeThinV);
-    Eigen::DiagonalMatrix<double, 3> dPrime(svd.singularValues()(0), svd.singularValues()(1), 0.0);
-    Eigen::Matrix3d FPrime = svd.matrixU() * dPrime * svd.matrixV().transpose();
-
-    return FPrime;   
-}
-
-Eigen::Transform<double, 2, Eigen::Affine> computeNormalizingTransform(Eigen::Ref<const Eigen::MatrixXd> a)
-{
-    Eigen::Vector2d mean = a.rowwise().mean();
-    Eigen::Vector2d stddev = (a.colwise() - mean).array().square().rowwise().mean().sqrt();    
-
-    Eigen::Transform<double, 2, Eigen::AffineCompact> t;
-    t = Eigen::Scaling(1.0 / stddev.norm()) *  Eigen::Translation2d(-mean);
-    return t;
-}
-
 Eigen::Transform<double, 3, Eigen::Affine> recoverPose(Eigen::Ref<const Eigen::MatrixXd> a, Eigen::Ref<const Eigen::MatrixXd> b, const Eigen::Matrix3d &F, const Eigen::Matrix3d &K)
 {
     std::vector<cv::Point2d> p0(a.cols());
     std::vector<cv::Point2d> p1(b.cols());
 
-    std::cout << __LINE__ << std::endl;
-
     for (Eigen::DenseIndex i = 0; i < a.cols(); ++i) {
         p0[i] = cv::Point2d(a(0, i), a(1, i));
         p1[i] = cv::Point2d(b(0, i), b(1, i));
     }
-
-    std::cout << "F-OpenCV" << std::endl;
-    std::cout << cv::findFundamentalMat(p0, p1) << std::endl;
    
     double f = K(0, 0);
     cv::Point2d p(K(0, 2), K(1, 2));
@@ -120,7 +61,7 @@ TEST_CASE("8point")
     const double foc = 530.0;
     const int width = 640;
     const int height = 480;
-    const int nPoints = 60;
+    const int nPoints = 8;
 
     Eigen::Matrix3d k;
     k << 
@@ -129,44 +70,30 @@ TEST_CASE("8point")
         0.0, 0.0, 1.0;
 
     // Generate random 3D points
-    Eigen::AlignedBox3d box(Eigen::Vector3d(-500, -500, 300), Eigen::Vector3d(500, 500, 1500));
-    Eigen::MatrixXd points(3, nPoints);
-    for (int i = 0; i < nPoints; ++i) {
-        points.col(i) = box.sample();
-    }
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points = eight::utils::samplePointsInBox(Eigen::Vector3d(-500, -500, 300), Eigen::Vector3d(500, 500, 1500), nPoints);
 
     // Assume the first camera at origin and the second freely transformed.
     Eigen::Transform<double, 3, Eigen::AffineCompact> t0;
     t0.setIdentity();
 
     Eigen::Transform<double, 3, Eigen::AffineCompact> t1;
-    t1 = Eigen::Translation3d(150.0, 0, 0);
+    t1 = Eigen::Translation3d(0.0, 10.0, 0) * Eigen::AngleAxisd(0.25*M_PI, Eigen::Vector3d::UnitX());
 
     // Generate projected image points
     Eigen::Matrix<double, 3, 4> p0 = k * t0.matrix();
     Eigen::Matrix<double, 3, 4> p1 = k * t1.matrix();
 
-    Eigen::Matrix<double, 2, Eigen::Dynamic> image0 = (p0 * points.colwise().homogeneous()).colwise().hnormalized();
-    Eigen::Matrix<double, 2, Eigen::Dynamic> image1 = (p1 * points.colwise().homogeneous()).colwise().hnormalized();
+    Eigen::Matrix<double, 2, Eigen::Dynamic> image0 = eight::utils::projectPoints(k, t0, points);
+    Eigen::Matrix<double, 2, Eigen::Dynamic> image1 = eight::utils::projectPoints(k, t1, points);
     
     // Normalize points
-    Eigen::Transform<double, 2, Eigen::Affine> tin0 = computeNormalizingTransform(image0);
-    Eigen::Transform<double, 2, Eigen::Affine> tin1 = computeNormalizingTransform(image1);
-
-    Eigen::Matrix<double, 2, Eigen::Dynamic> nimage0 = (tin0.matrix() * image0.colwise().homogeneous()).colwise().hnormalized();
-    Eigen::Matrix<double, 2, Eigen::Dynamic> nimage1 = (tin1.matrix() * image1.colwise().homogeneous()).colwise().hnormalized();
+    Eigen::Matrix3d F = eight::findFundamentalMatrixNormalized(image0, image1);
+    std::cout << "F: " << F << std::endl;
     
-    Eigen::Matrix3d Fn = estimateFundamentalMatrixEightPoint(nimage0, nimage1);
-    Eigen::Matrix3d F = (tin1.matrix().transpose() * Fn * tin0.matrix());
-
-    std::cout << "8Point" << std::endl;
-    std::cout << F << std::endl;
-    
-
-    for (Eigen::DenseIndex i = 0; i < image0.cols(); ++i) {
-        std::cout << image1.col(i).transpose().homogeneous() * F * image0.col(i).homogeneous() << std::endl;
-    }    
+    Eigen::VectorXd dists = eight::distances(F, image0, image1, eight::SampsonDistance());
+    std::cout << "Mean distance " << dists.mean() << std::endl;
 
     // Recover pose using OpenCV
     recoverPose(image0, image1, F, k);
+    std::cout << t1.matrix() << std::endl;
 }

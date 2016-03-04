@@ -23,9 +23,19 @@ list(APPEND 8POINT_LINK_TARGETS ${OpenCV_LIBRARIES})
 
 include_directories(${CMAKE_CURRENT_BINARY_DIR} ${8POINT_EIGEN_DIR} "inc")
 
+add_library(8point
+    inc/eight/fundamental.h
+    inc/eight/normalize.h
+    inc/eight/distance.h
+    src/fundamental.cpp
+    src/normalize.cpp
+    src/distance.cpp
+)
 
 add_executable(8point_tests
     tests/catch.hpp
+    tests/utils.h
     tests/test_8point.cpp
+
 )
-target_link_libraries(8point_tests ${8POINT_LINK_TARGETS})
+target_link_libraries(8point_tests 8point ${8POINT_LINK_TARGETS})
