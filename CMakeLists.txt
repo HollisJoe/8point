@@ -25,9 +25,12 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR} ${8POINT_EIGEN_DIR} "inc")
 
 add_library(8point
     inc/eight/fundamental.h
+    inc/eight/essential.h
     inc/eight/normalize.h
     inc/eight/distance.h
+    inc/eight/triangulate.h
     src/fundamental.cpp
+    src/essential.cpp
     src/normalize.cpp
     src/distance.cpp
 )

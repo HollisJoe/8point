@@ -16,7 +16,7 @@
 
 namespace eight {
     
-    Eigen::Matrix3d findFundamentalMatrix(Eigen::Ref<const Eigen::MatrixXd> a, Eigen::Ref<const Eigen::MatrixXd> b) {
+    Eigen::Matrix3d fundamentalMatrix(Eigen::Ref<const Eigen::MatrixXd> a, Eigen::Ref<const Eigen::MatrixXd> b) {
         
         eigen_assert(a.cols() == b.cols());
         eigen_assert(a.rows() == b.rows());
@@ -64,7 +64,7 @@ namespace eight {
 
     }
     
-    Eigen::Matrix3d findFundamentalMatrixNormalized(Eigen::Ref<const Eigen::MatrixXd> a, Eigen::Ref<const Eigen::MatrixXd> b)
+    Eigen::Matrix3d fundamentalMatrixNormalized(Eigen::Ref<const Eigen::MatrixXd> a, Eigen::Ref<const Eigen::MatrixXd> b)
     {
         Eigen::Transform<double, 2, Eigen::Affine> t0 = findIsotropicNormalizingTransform(a);
         Eigen::Transform<double, 2, Eigen::Affine> t1 = findIsotropicNormalizingTransform(b);
@@ -72,7 +72,7 @@ namespace eight {
         Eigen::Matrix<double, 2, Eigen::Dynamic> na = (t0.matrix() * a.colwise().homogeneous()).colwise().hnormalized();
         Eigen::Matrix<double, 2, Eigen::Dynamic> nb = (t1.matrix() * b.colwise().homogeneous()).colwise().hnormalized();
         
-        Eigen::Matrix3d Fn = eight::findFundamentalMatrix(na, nb);
+        Eigen::Matrix3d Fn = eight::fundamentalMatrix(na, nb);
         Eigen::Matrix3d F = (t1.matrix().transpose() * Fn * t0.matrix());
         return F;
     }

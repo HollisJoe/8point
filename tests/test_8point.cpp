@@ -15,6 +15,7 @@
 #include <eight/fundamental.h>
 #include <eight/normalize.h>
 #include <eight/distance.h>
+#include <eight/essential.h>
 #include "utils.h"
 
 
@@ -50,6 +51,7 @@ Eigen::Transform<double, 3, Eigen::Affine> recoverPose(Eigen::Ref<const Eigen::M
     cv::Mat R, t;
     cv::recoverPose(ECV, p0, p1, R, t, f, p);
 
+    std::cout << "OpenCV" << std::endl;
     std::cout << R << std::endl;
     std::cout << t << std::endl;
     
@@ -77,23 +79,22 @@ TEST_CASE("8point")
     t0.setIdentity();
 
     Eigen::Transform<double, 3, Eigen::AffineCompact> t1;
-    t1 = Eigen::Translation3d(0.0, 10.0, 0) * Eigen::AngleAxisd(0.25*M_PI, Eigen::Vector3d::UnitX());
+    t1 = Eigen::Translation3d(0.0, 0.1, 0) /** Eigen::AngleAxisd(0.25*M_PI, Eigen::Vector3d::UnitX())*/;
 
     // Generate projected image points
-    Eigen::Matrix<double, 3, 4> p0 = k * t0.matrix();
-    Eigen::Matrix<double, 3, 4> p1 = k * t1.matrix();
-
     Eigen::Matrix<double, 2, Eigen::Dynamic> image0 = eight::utils::projectPoints(k, t0, points);
     Eigen::Matrix<double, 2, Eigen::Dynamic> image1 = eight::utils::projectPoints(k, t1, points);
     
     // Normalize points
-    Eigen::Matrix3d F = eight::findFundamentalMatrixNormalized(image0, image1);
-    std::cout << "F: " << F << std::endl;
+    Eigen::Matrix3d F = eight::fundamentalMatrixNormalized(image0, image1);
+    Eigen::VectorXd dists = eight::distances(F, image0, image1, eight::SampsonDistanceSquared());
     
-    Eigen::VectorXd dists = eight::distances(F, image0, image1, eight::SampsonDistance());
-    std::cout << "Mean distance " << dists.mean() << std::endl;
+    Eigen::Matrix3d E = eight::essentialMatrix(k, F);
+    Eigen::Affine3d pose = eight::pose(E, k, image0, image1);
+    
+    std::cout << "Pose: " << pose.matrix() << std::endl;
 
     // Recover pose using OpenCV
     recoverPose(image0, image1, F, k);
-    std::cout << t1.matrix() << std::endl;
+    std::cout << "Should be: " << t1.matrix() << std::endl;
 }

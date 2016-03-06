@@ -19,13 +19,13 @@ namespace eight {
     /** 
         First order approximation of geometric error.
     */
-    class SampsonDistance {
+    class SampsonDistanceSquared {
     public:
         double operator()(const Eigen::Matrix3d &f, Eigen::Ref<const Eigen::Vector2d> a,  Eigen::Ref<const Eigen::Vector2d> b) const;
     };
     
     /**
-        Find normalizing transform of image points to support the conditioning of fundamental matrices.
+        Compute distances for each pair of correspondences.
     */
     template<class Functor>
     Eigen::VectorXd distances(const Eigen::Matrix3d &f, Eigen::Ref<const Eigen::MatrixXd> a, Eigen::Ref<const Eigen::MatrixXd> b, Functor err) {

@@ -18,12 +18,12 @@ namespace eight {
     /**
         Estimate fundamental matrix from pairs of corresponding image points
     */
-    Eigen::Matrix3d findFundamentalMatrix(Eigen::Ref<const Eigen::MatrixXd> a, Eigen::Ref<const Eigen::MatrixXd> b);
+    Eigen::Matrix3d fundamentalMatrix(Eigen::Ref<const Eigen::MatrixXd> a, Eigen::Ref<const Eigen::MatrixXd> b);
     
     /**
         Estimate fundamental matrix from pairs of corresponding image points.
      */
-    Eigen::Matrix3d findFundamentalMatrixNormalized(Eigen::Ref<const Eigen::MatrixXd> a, Eigen::Ref<const Eigen::MatrixXd> b);
+    Eigen::Matrix3d fundamentalMatrixNormalized(Eigen::Ref<const Eigen::MatrixXd> a, Eigen::Ref<const Eigen::MatrixXd> b);
     
 }
 
