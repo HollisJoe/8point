@@ -25,7 +25,7 @@ namespace eight {
     /**
         Recover pose from essential matrix up to scale.
     */
-    Eigen::Affine3d pose(const Eigen::Matrix3d &e, const Eigen::Matrix3d &k, Eigen::Ref<const Eigen::MatrixXd> a, Eigen::Ref<const Eigen::MatrixXd> b);
+    Eigen::AffineCompact3d pose(const Eigen::Matrix3d &e, const Eigen::Matrix3d &k, Eigen::Ref<const Eigen::MatrixXd> a, Eigen::Ref<const Eigen::MatrixXd> b);
     
 }
 

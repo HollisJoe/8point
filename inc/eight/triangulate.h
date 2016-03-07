@@ -21,8 +21,8 @@ namespace eight {
         Hartley, Richard I., and Peter Sturm. "Triangulation."
         Computer vision and image understanding 68.2 (1997): 146-157.
      */
-    inline Eigen::Vector3d triangulate(const Eigen::Matrix4d &cam0,
-                                       const Eigen::Matrix4d &cam1,
+    inline Eigen::Vector3d triangulate(const Eigen::Matrix<double, 3, 4> &cam0,
+                                       const Eigen::Matrix<double, 3, 4> &cam1,
                                        const Eigen::Vector2d &u0,
                                        const Eigen::Vector2d &u1)
     {

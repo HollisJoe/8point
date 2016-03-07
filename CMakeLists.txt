@@ -29,10 +29,12 @@ add_library(8point
     inc/eight/normalize.h
     inc/eight/distance.h
     inc/eight/triangulate.h
+    inc/eight/project.h
     src/fundamental.cpp
     src/essential.cpp
     src/normalize.cpp
     src/distance.cpp
+    src/project.cpp
 )
 
 add_executable(8point_tests

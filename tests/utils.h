@@ -22,12 +22,5 @@ namespace eight {
             }
             return points;
         }
-        
-        
-        inline Eigen::Matrix<double, 2, Eigen::Dynamic> projectPoints(const Eigen::Matrix3d &k, const Eigen::AffineCompact3d &t, const Eigen::Matrix<double, 3, Eigen::Dynamic> &points)
-        {
-            Eigen::Matrix<double, 3, 4> p = k * t.matrix();
-            return (p * points.colwise().homogeneous()).colwise().hnormalized();
-        }
     }
 }
