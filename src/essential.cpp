@@ -73,7 +73,7 @@ namespace eight {
             Eigen::Vector3d p = triangulate(camFirst, k4 * camSecond[i], a.col(0), b.col(0));
             Eigen::Vector3d pp = (camSecond[i].inverse() * p.colwise().homogeneous()).colwise().hnormalized();
             
-            if (p.z() >= 0.0 & pp.z() >= 0.0) {
+            if (p.z() >= 0.0 && pp.z() >= 0.0) {
                 Eigen::Affine3d t;
                 t.matrix() = camSecond[i];
                 return t;
