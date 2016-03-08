@@ -58,6 +58,8 @@ namespace eight {
             cameraPose(r1, -t)
         };
         
+        // Unhandled: triangulate does not work for points at infinity. How to handle these?
+
         for (int i = 0 ; i < 4; ++i) {
 
             Eigen::Matrix<double, 3, 4> camSecond = cameraMatrix(k, camPosesSecond[i]);
