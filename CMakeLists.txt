@@ -40,7 +40,6 @@ add_library(8point
 add_executable(8point_tests
     tests/catch.hpp
     tests/utils.h
-    tests/test_8point.cpp
-
+    tests/test_pose.cpp
 )
 target_link_libraries(8point_tests 8point ${8POINT_LINK_TARGETS})

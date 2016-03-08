@@ -46,9 +46,6 @@ namespace eight {
         Eigen::Matrix3d r0 = u * w * v.transpose();
         Eigen::Matrix3d r1 = u * w.transpose() * v.transpose();
         Eigen::Vector3d t = u.col(2);
-
-        std::cout << r0 << std::endl;
-        std::cout << r1 << std::endl;
        
         // Test possible solutions. According to Hartley testing one point for being infront of both cameras should be
         // enough.
