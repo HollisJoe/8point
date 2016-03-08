@@ -31,14 +31,14 @@ namespace eight {
             
             auto r = A.row(i);
             
-            r(0) = ca.x() * cb.x();     // F11
-            r(1) = ca.x() * cb.y();     // F21
-            r(2) = ca.x();              // F31
-            r(3) = ca.y() * cb.x();     // F12
-            r(4) = ca.y() * cb.y();     // F22
-            r(5) = ca.y();              // F32
-            r(6) = cb.x();              // F13
-            r(7) = cb.y();              // F23
+            r(0) = cb.x() * ca.x();     // F11
+            r(1) = cb.x() * ca.y();     // F21
+            r(2) = cb.x();              // F31
+            r(3) = cb.y() * ca.x();     // F12
+            r(4) = cb.y() * ca.y();     // F22
+            r(5) = cb.y();              // F32
+            r(6) = ca.x();              // F13
+            r(7) = ca.y();              // F23
             r(8) = 1.0;                 // F33
         }
         
@@ -73,7 +73,7 @@ namespace eight {
         Eigen::Matrix<double, 2, Eigen::Dynamic> nb = (t1.matrix() * b.colwise().homogeneous()).colwise().hnormalized();
         
         Eigen::Matrix3d Fn = eight::fundamentalMatrixUnnormalized(na, nb);
-        Eigen::Matrix3d F = (t1.matrix().transpose() * Fn * t0.matrix());
+        Eigen::Matrix3d F = (t0.matrix().transpose() * Fn * t1.matrix());
         return F;
     }
 }

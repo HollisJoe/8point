@@ -12,36 +12,38 @@
 #define EIGHT_PROJECT_H
 
 #include <Eigen/Core>
+#include <Eigen/Geometry>
 
 namespace eight {
+
+    /**
+    Assemble perspective projection matrix.
+    */
+    Eigen::Matrix<double, 3, 4> cameraPose(const Eigen::Matrix<double, 3, 3> &r, const Eigen::Vector3d &t);
     
     /**
         Assemble perspective projection matrix.
     */
-    Eigen::Matrix<double, 3, 4> perspectiveProjectionMatrix(const Eigen::Matrix<double, 3, 3> &k,
-                                                            const Eigen::Matrix<double, 3, 3> &r,
-                                                            const Eigen::Vector3d &t);
+    Eigen::Matrix<double, 3, 4> cameraMatrix(const Eigen::Matrix<double, 3, 3> &k,
+                                             const Eigen::Matrix<double, 3, 3> &r,
+                                             const Eigen::Vector3d &t);
+
+    /**
+    Assemble perspective projection matrix.
+    */
+    Eigen::Matrix<double, 3, 4> cameraMatrix(const Eigen::Matrix<double, 3, 3> &k,
+                                             const Eigen::AffineCompact3d &pose);
+
+    /**
+    Assemble perspective projection matrix.
+    */
+    Eigen::Matrix<double, 3, 4> cameraMatrix(const Eigen::Matrix<double, 3, 3> &k,
+                                             const Eigen::Matrix<double, 3, 4> &pose);
     
     /**
         Perspective projection of three-dimensional points.
     */
     Eigen::Matrix<double, 3, Eigen::Dynamic> perspectiveProject(Eigen::Ref<const Eigen::MatrixXd> points, const Eigen::Matrix<double, 3, 4>  &p);
-    
-    
-    /**
-     Perspective projection of three-dimensional points.
-     */
-    Eigen::Matrix<double, 3, Eigen::Dynamic> perspectiveProject(Eigen::Ref<const Eigen::MatrixXd> points,
-                                                                const Eigen::Matrix<double, 3, 3> &k,
-                                                                const Eigen::Matrix<double, 3, 3> &r,
-                                                                const Eigen::Vector3d &t);
-    
-    /**
-     Perspective projection of three-dimensional points.
-     */
-    Eigen::Matrix<double, 3, Eigen::Dynamic> perspectiveProject(Eigen::Ref<const Eigen::MatrixXd> points,
-                                                                const Eigen::Matrix<double, 3, 3> &k,
-                                                                const Eigen::Matrix<double, 3, 4> &g);
     
 }
 

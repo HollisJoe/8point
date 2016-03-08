@@ -76,25 +76,26 @@ TEST_CASE("8point")
     Eigen::Matrix<double, 3, Eigen::Dynamic> points = eight::utils::samplePointsInBox(Eigen::Vector3d(-500, -500, 300), Eigen::Vector3d(500, 500, 1500), nPoints);
 
     // Assume the first camera at origin and the second freely transformed.
-    Eigen::Transform<double, 3, Eigen::AffineCompact> t0;
+    Eigen::AffineCompact3d t0;
     t0.setIdentity();
 
-    Eigen::Transform<double, 3, Eigen::AffineCompact> t1;
-    t1 = Eigen::Translation3d(0.0, 0.1, 0) * Eigen::AngleAxisd(0.25*M_PI, Eigen::Vector3d::UnitX());
+    Eigen::AffineCompact3d t1;
+    t1 = Eigen::Translation3d(10.0, 10.0, 0) * Eigen::AngleAxisd(0.25*M_PI, Eigen::Vector3d(0.5, -0.3, 0.2).normalized());
 
     // Generate projected image points
-    Eigen::Matrix<double, 2, Eigen::Dynamic> image0 = eight::perspectiveProject(points, k, t0.matrix()).colwise().hnormalized();
-    Eigen::Matrix<double, 2, Eigen::Dynamic> image1 = eight::perspectiveProject(points, k, t1.matrix()).colwise().hnormalized();
-    
-    Eigen::Matrix3d F = eight::fundamentalMatrix(image0, image1);
-    Eigen::VectorXd dists = eight::distances(F, image0, image1, eight::SampsonDistanceSquared());
-    
-    Eigen::Matrix3d E = eight::essentialMatrix(k, F);
-    Eigen::AffineCompact3d pose = eight::pose(E, k, image0, image1);
-    
-    std::cout << "Pose: " << pose.matrix() << std::endl;
+    Eigen::Matrix<double, 3, 4> cam0 = eight::cameraMatrix(k, t0);
+    Eigen::Matrix<double, 3, 4> cam1 = eight::cameraMatrix(k, t1);
 
-    // Recover pose using OpenCV
+    Eigen::Matrix<double, 2, Eigen::Dynamic> image0 = eight::perspectiveProject(points, cam0).colwise().hnormalized();
+    Eigen::Matrix<double, 2, Eigen::Dynamic> image1 = eight::perspectiveProject(points, cam1).colwise().hnormalized();
+
+    Eigen::Matrix3d F = eight::fundamentalMatrix(image0, image1);   
+    Eigen::Matrix3d E = eight::essentialMatrix(k, F);
+    Eigen::Matrix<double, 3, 4> pose = eight::pose(E, k, image0, image1);
+
+    std::cout << "Should be: " << std::endl <<  t1.matrix() << std::endl;
+    std::cout << "Pose: " << std::endl << pose << std::endl;
+
     recoverPose(image0, image1, F, k);
-    std::cout << "Should be: " << t1.matrix() << std::endl;
+    
 }

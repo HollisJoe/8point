@@ -20,7 +20,7 @@ namespace eight {
         return k.transpose() * f * k;
     }
     
-    Eigen::AffineCompact3d pose(const Eigen::Matrix3d &e, const Eigen::Matrix3d &k, Eigen::Ref<const Eigen::MatrixXd> a, Eigen::Ref<const Eigen::MatrixXd> b) {
+    Eigen::Matrix<double, 3, 4> pose(const Eigen::Matrix3d &e, const Eigen::Matrix3d &k, Eigen::Ref<const Eigen::MatrixXd> a, Eigen::Ref<const Eigen::MatrixXd> b) {
         
         Eigen::JacobiSVD<Eigen::Matrix3d> svd(e, Eigen::ComputeThinU | Eigen::ComputeThinV);
         
@@ -46,31 +46,34 @@ namespace eight {
         Eigen::Matrix3d r0 = u * w * v.transpose();
         Eigen::Matrix3d r1 = u * w.transpose() * v.transpose();
         Eigen::Vector3d t = u.col(2);
-        
+
+        std::cout << r0 << std::endl;
+        std::cout << r1 << std::endl;
+       
         // Test possible solutions. According to Hartley testing one point for being infront of both cameras should be
         // enough.
         
-        Eigen::Matrix<double, 3, 4> camFirst = perspectiveProjectionMatrix(k, Eigen::Matrix3d::Identity(), Eigen::Vector3d::Zero());
-        Eigen::Matrix<double, 3, 4> camSecond[4] = {
-            perspectiveProjectionMatrix(Eigen::Matrix3d::Identity(), r0, t),
-            perspectiveProjectionMatrix(Eigen::Matrix3d::Identity(), r0, -t),
-            perspectiveProjectionMatrix(Eigen::Matrix3d::Identity(), r1, t),
-            perspectiveProjectionMatrix(Eigen::Matrix3d::Identity(), r1, -t)
+        Eigen::Matrix<double, 3, 4> camFirst = cameraMatrix(k, Eigen::Matrix<double, 3, 4>::Identity());
+        Eigen::Matrix<double, 3, 4> camPosesSecond[4] = {
+            cameraPose(r0, t),
+            cameraPose(r0, -t),
+            cameraPose(r1, t),
+            cameraPose(r1, -t)
         };
         
         for (int i = 0 ; i < 4; ++i) {
-            Eigen::Vector3d p = triangulate(camFirst, k * camSecond[i], a.col(0), b.col(0));
-            Eigen::Vector3d pSecond = Eigen::AffineCompact3d(camSecond[i]).inverse(Eigen::Isometry).matrix() * p.colwise().homogeneous();
+
+            Eigen::Matrix<double, 3, 4> camSecond = cameraMatrix(k, camPosesSecond[i]);
+
+            Eigen::Vector3d p = triangulate(camFirst, camSecond, a.col(0), b.col(0));
+            Eigen::Vector3d pSecond = camSecond * p.colwise().homogeneous();
         
-            
             if (p.z() >= 0.0 && pSecond.z() >= 0.0) {
-                Eigen::AffineCompact3d t;
-                t.matrix() = camSecond[i];
-                return t;
+                return camPosesSecond[i];
             }
         }
         
-        return Eigen::AffineCompact3d();
+        return Eigen::Matrix<double, 3, 4>::Identity();
     }
     
 }
