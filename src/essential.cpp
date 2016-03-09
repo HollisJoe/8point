@@ -22,7 +22,7 @@ namespace eight {
     
     Eigen::Matrix<double, 3, 4> pose(const Eigen::Matrix3d &e, const Eigen::Matrix3d &k, Eigen::Ref<const Eigen::MatrixXd> a, Eigen::Ref<const Eigen::MatrixXd> b) {
         
-        Eigen::JacobiSVD<Eigen::Matrix3d> svd(e, Eigen::ComputeThinU | Eigen::ComputeThinV);
+        Eigen::JacobiSVD<Eigen::Matrix3d> svd(e, Eigen::ComputeFullU | Eigen::ComputeFullV);
         
         // Assuming the first camera at identity, there are four possible solutions that need to be tested for
         // the second camera.

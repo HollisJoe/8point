@@ -20,7 +20,7 @@
 #include <eight/project.h>
 #include "utils.h"
 
-#include <opencv2/core/eigen.hpp>
+#include <opencv2\opencv.hpp>
 
 TEST_CASE("test_pose")
 {

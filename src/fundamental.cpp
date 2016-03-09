@@ -56,7 +56,7 @@ namespace eight {
         f(2), f(5), f(8);
         
         // Enforce singularity constraint such that rank(F) = 2. Which is the closest singular matrix to F under Frobenius norm.
-        Eigen::JacobiSVD<Eigen::Matrix3d> svd(F, Eigen::ComputeThinU | Eigen::ComputeThinV);
+        Eigen::JacobiSVD<Eigen::Matrix3d> svd(F, Eigen::ComputeFullU | Eigen::ComputeFullV);
         Eigen::DiagonalMatrix<double, 3> dPrime(svd.singularValues()(0), svd.singularValues()(1), 0.0);
         Eigen::Matrix3d FPrime = svd.matrixU() * dPrime * svd.matrixV().transpose();
         

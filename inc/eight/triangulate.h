@@ -33,7 +33,7 @@ namespace eight {
         X.row(2) = u1(0) * cam1.row(2) - cam1.row(0);
         X.row(3) = u1(1) * cam1.row(2) - cam1.row(1);
         
-        return X.block<4,3>(0,0).jacobiSvd(Eigen::ComputeThinU | Eigen::ComputeThinV).solve(-X.col(3));
+        return X.block<4,3>(0,0).jacobiSvd(Eigen::ComputeFullU | Eigen::ComputeFullV).solve(-X.col(3));
     }
     
     /** Triangulate rays using linear least squares.
