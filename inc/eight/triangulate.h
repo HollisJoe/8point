@@ -42,12 +42,12 @@ namespace eight {
         Hartley, Richard I., and Peter Sturm. "Triangulation."
         Computer vision and image understanding 68.2 (1997): 146-157.
      */
-    inline Eigen::MatrixXd triangulateMany(const Eigen::Matrix4d &cam0,
-                                           const Eigen::Matrix4d &cam1,
-                                           Eigen::Ref<const Eigen::MatrixXd> u0,
-                                           Eigen::Ref<const Eigen::MatrixXd> u1)
+    inline Eigen::Matrix<double, 3, Eigen::Dynamic> triangulateMany(const Eigen::Matrix<double, 3, 4> &cam0,
+                                                                    const Eigen::Matrix<double, 3, 4> &cam1,
+                                                                    Eigen::Ref<const Eigen::MatrixXd> u0,
+                                                                    Eigen::Ref<const Eigen::MatrixXd> u1)
     {
-        Eigen::MatrixXd vecs(3, u0.cols());
+        Eigen::Matrix<double, 3, Eigen::Dynamic> vecs(3, u0.cols());
         
         Eigen::Matrix<double, 4, 4> X;
         for (Eigen::DenseIndex i  = 0; i < u0.cols(); ++i) {
@@ -56,7 +56,7 @@ namespace eight {
             X.row(1) = u0(1, i) * cam0.row(2) - cam0.row(1);
             X.row(2) = u1(0, i) * cam1.row(2) - cam1.row(0);
             X.row(3) = u1(1, i) * cam1.row(2) - cam1.row(1);
-            vecs.col(i) = X.block<4,3>(0,0).jacobiSvd(Eigen::ComputeThinU | Eigen::ComputeThinV).solve(-X.col(3));
+            vecs.col(i) = X.block<4,3>(0,0).jacobiSvd(Eigen::ComputeFullU | Eigen::ComputeFullV).solve(-X.col(3));
         }
         
         return vecs;
