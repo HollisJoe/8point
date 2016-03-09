@@ -11,16 +11,12 @@
 #define CATCH_CONFIG_MAIN
 #include "catch.hpp"
 
-
-
 #include <eight/fundamental.h>
 #include <eight/normalize.h>
 #include <eight/distance.h>
 #include <eight/essential.h>
 #include <eight/project.h>
 #include "utils.h"
-
-#include <opencv2\opencv.hpp>
 
 TEST_CASE("test_pose")
 {

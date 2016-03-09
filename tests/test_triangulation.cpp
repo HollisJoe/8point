@@ -14,8 +14,6 @@
 #include <eight/triangulate.h>
 #include "utils.h"
 
-#include <opencv2\opencv.hpp>
-
 TEST_CASE("test_triangulation")
 {
     const double foc = 530.0;

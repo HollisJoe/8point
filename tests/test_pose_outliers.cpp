@@ -18,9 +18,8 @@
 #include <eight/project.h>
 #include <eight/select.h>
 #include <random>
+#include <iostream>
 #include "utils.h"
-
-#include <opencv2\opencv.hpp>
 
 TEST_CASE("test_pose_outliers")
 {
