@@ -10,9 +10,13 @@
 
 #include <eight/fundamental.h>
 #include <eight/normalize.h>
+#include <eight/distance.h>
+#include <eight/select.h>
 
 #include <Eigen/Eigenvalues>
 #include <Eigen/SVD>
+#include <vector>
+#include <random>
 
 namespace eight {
     
@@ -75,5 +79,79 @@ namespace eight {
         Eigen::Matrix3d Fn = eight::fundamentalMatrixUnnormalized(na, nb);
         Eigen::Matrix3d F = (t0.matrix().transpose() * Fn * t1.matrix());
         return F;
+    }
+
+    template <class ForwardIterator, class T>
+    void fillIncremental(ForwardIterator first, ForwardIterator last, T val)
+    {
+        while (first != last) {
+            *first = val;
+            ++first;
+            ++val;
+        }
+    }
+
+    std::vector<Eigen::DenseIndex> samplePointIndices(Eigen::DenseIndex setSize, Eigen::DenseIndex sampleSize) {
+        std::vector<Eigen::DenseIndex> ids(setSize);
+        fillIncremental(ids.begin(), ids.end(), 0);
+        
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        
+        // Fisher-Yates sampling
+        std::vector<Eigen::DenseIndex> result(sampleSize);
+        for (Eigen::DenseIndex i = 0; i < sampleSize; i++) {
+            std::uniform_int_distribution<Eigen::DenseIndex> dis(i, setSize - 1);
+            std::swap(ids[i], ids[dis(gen)]);
+            result[i] = ids[i];
+        }
+        
+        return result;
+    }
+
+    Eigen::Matrix3d fundamentalMatrixRobust(Eigen::Ref<const Eigen::MatrixXd> a, Eigen::Ref<const Eigen::MatrixXd> b, std::vector<Eigen::DenseIndex> &inliers, double d, double e, double p)
+    {
+        // First perform a ransac to find a a fundamental matrix. Then re-estimate fundamental matrix from all inliers.
+
+        int niter = static_cast<int>(std::ceil(std::log(1.0 - p) / std::log(1.0 - std::pow(1.0 - e, 8))));
+
+
+        const double d2 = d * d;
+
+        Eigen::Matrix3d bestF = Eigen::Matrix3d::Constant(std::numeric_limits<double>::quiet_NaN());
+        inliers.clear();
+
+        for (int iter = 0; iter < niter; ++iter) {
+            // Randomly select 8 different points
+            std::vector<Eigen::DenseIndex> modelIds = samplePointIndices(a.cols(), 8);
+            
+            // Build model
+            Eigen::Matrix<double, 2, Eigen::Dynamic> sa = selectColumnsByIndex(a, modelIds.begin(), modelIds.end());
+            Eigen::Matrix<double, 2, Eigen::Dynamic> sb = selectColumnsByIndex(b, modelIds.begin(), modelIds.end());
+            Eigen::Matrix3d F = fundamentalMatrix(sa, sb);
+
+            // Evaluate inliers
+            Eigen::VectorXd dists = distances(F, a, b, SampsonDistanceSquared());            
+            std::vector<Eigen::DenseIndex> in;
+            for (Eigen::DenseIndex i = 0; i < dists.size(); ++i) {
+                if (dists(i) <= d2) {
+                    in.push_back(i);
+                }
+            }
+
+            if (in.size() > inliers.size()) {
+                std::swap(in, inliers);
+                std::swap(F, bestF);
+            }
+        }
+
+        if (bestF.allFinite()) {
+            // Re-estimate using all inliers
+            Eigen::Matrix<double, 2, Eigen::Dynamic> sa = selectColumnsByIndex(a, inliers.begin(), inliers.end());
+            Eigen::Matrix<double, 2, Eigen::Dynamic> sb = selectColumnsByIndex(b, inliers.begin(), inliers.end());
+            bestF = fundamentalMatrix(sa, sb);
+        }
+
+        return bestF;
     }
 }

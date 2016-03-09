@@ -8,26 +8,26 @@
     of the BSD license.See the LICENSE file for details.
 */
 
-#define CATCH_CONFIG_MAIN
+
 #include "catch.hpp"
-
-
 
 #include <eight/fundamental.h>
 #include <eight/normalize.h>
 #include <eight/distance.h>
 #include <eight/essential.h>
 #include <eight/project.h>
+#include <eight/select.h>
+#include <random>
 #include "utils.h"
 
 #include <opencv2\opencv.hpp>
 
-TEST_CASE("test_pose")
+TEST_CASE("test_pose_outliers")
 {
     const double foc = 530.0;
     const int width = 640;
     const int height = 480;
-    const int nPoints = 8;
+    const int nPoints = 60;
 
     Eigen::Matrix3d k;
     k << 
@@ -52,9 +52,23 @@ TEST_CASE("test_pose")
     Eigen::Matrix<double, 2, Eigen::Dynamic> image0 = eight::perspectiveProject(points, cam0).colwise().hnormalized();
     Eigen::Matrix<double, 2, Eigen::Dynamic> image1 = eight::perspectiveProject(points, cam1).colwise().hnormalized();
 
-    Eigen::Matrix3d F = eight::fundamentalMatrix(image0, image1);   
-    std::cout << F << std::endl;
+    // Disturb around 10% of outliers
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<Eigen::DenseIndex> dis(0, image0.cols() - 1);
+    for (int i = 0; i < nPoints / 10; i++) {
+        Eigen::DenseIndex idx = dis(gen);
+        image0.col(idx) += Eigen::Vector2d::Random() * 20.0;
+        image1.col(idx) += Eigen::Vector2d::Random() * 20.0;
+    }
+
+    std::vector<Eigen::DenseIndex> inliers;
+    Eigen::Matrix3d F = eight::fundamentalMatrixRobust(image0, image1, inliers, 0.1);
     Eigen::Matrix3d E = eight::essentialMatrix(k, F);
+
+    image0 = eight::selectColumnsByIndex(image0, inliers.begin(), inliers.end());
+    image1 = eight::selectColumnsByIndex(image1, inliers.begin(), inliers.end());
+
     Eigen::Matrix<double, 3, 4> pose = eight::pose(E, k, image0, image1);
 
     std::cout << "Should be: " << std::endl <<  t1.matrix() << std::endl;
