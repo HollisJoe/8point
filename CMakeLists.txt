@@ -46,3 +46,9 @@ add_executable(8point_tests
     tests/test_triangulation.cpp
 )
 target_link_libraries(8point_tests 8point ${8POINT_LINK_TARGETS})
+
+
+add_executable(8point_defocus
+    examples/defocus.cpp    
+)
+target_link_libraries(8point_defocus 8point ${8POINT_LINK_TARGETS})
