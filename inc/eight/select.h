@@ -16,22 +16,13 @@
 
 namespace eight {
     
-    template<class Derived, class IndexIterator>
-    Eigen::Matrix<
-        typename Eigen::MatrixBase<Derived>::Scalar,
-        Eigen::MatrixBase<Derived>::RowsAtCompileTime,
-        Eigen::MatrixBase<Derived>::ColsAtCompileTime
-    >
-    selectColumnsByIndex(const Eigen::MatrixBase<Derived> &m, IndexIterator begin, IndexIterator end) {
+    template<class IndexIterator>
+    Eigen::MatrixXd
+    selectColumnsByIndex(const Eigen::Ref<const Eigen::MatrixXd > &m, IndexIterator begin, IndexIterator end) {
         
         Eigen::DenseIndex count = (Eigen::DenseIndex)std::distance(begin, end);
-        
-        Eigen::Matrix<
-            typename Eigen::MatrixBase<Derived>::Scalar,
-            Eigen::MatrixBase<Derived>::RowsAtCompileTime,
-            Eigen::MatrixBase<Derived>::ColsAtCompileTime
-        > r(m.rows(), count);
-        
+
+        Eigen::MatrixXd r(m.rows(), count);
         
         Eigen::DenseIndex i = 0;
         while (begin != end) {
