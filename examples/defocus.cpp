@@ -14,10 +14,12 @@
 #include <eight/essential.h>
 #include <eight/project.h>
 #include <eight/select.h>
+#include <eight/triangulate.h>
 #include <random>
 #include <iostream>
 
 #include <opencv2/opencv.hpp>
+#include <fstream>
 
 class KLT {
 public:
@@ -66,6 +68,35 @@ Eigen::MatrixXd toEight(const std::vector<cv::Point2f> &x) {
         m(0, i) = x[i].x;
         m(1, i) = x[i].y;
     }
+
+    return m;
+}
+
+void findFeaturesInReference(cv::Mat &gray, std::vector<cv::Point2f> &corners) {
+    double qualityLevel = 0.005;
+    double minDistance = 10;
+    int blockSize = 3;
+    bool useHarrisDetector = false;
+    double k = 0.04;
+    int maxCorners = 1500;
+
+    cv::goodFeaturesToTrack(gray,
+        corners,
+        maxCorners,
+        qualityLevel,
+        minDistance,
+        cv::Mat(),
+        blockSize,
+        useHarrisDetector,
+        k);
+}
+
+void trackFeatures(cv::Mat ref, const std::vector<cv::Point2f> &refLocs, cv::Mat target, std::vector<cv::Point2f> &targetLocs, std::vector<uchar> &status)
+{
+    KLT klt(ref, refLocs);
+    klt.update(target);
+    targetLocs = klt.location();
+    status = klt.status();
 }
 
 int main(int argc, char **argv) {
@@ -80,47 +111,43 @@ int main(int argc, char **argv) {
         return -1;
     }
 
+    // Taken from http://yf.io/p/tiny/
+    // Use 8point_defocus.exe "stream\stone6_still_%04d.png"
+    
+    Eigen::Matrix3d k;
+    k <<
+        1781.0, 0.0, 960.0,
+        0.0, 1781.0, 540.0,
+        0.0, 0.0, 1.0;
+
+
     // Assume first frame is reference frame
     cv::Mat ref, refGray;
     vc >> ref;
     cv::cvtColor(ref, refGray, CV_BGR2GRAY);
 
     std::vector<cv::Point2f> corners;
-    double qualityLevel = 0.01;
-    double minDistance = 10;
-    int blockSize = 3;
-    bool useHarrisDetector = false;
-    double k = 0.04;
-    int maxCorners = 500;
-
-    cv::goodFeaturesToTrack(refGray,
-        corners,
-        maxCorners,
-        qualityLevel,
-        minDistance,
-        cv::Mat(),
-        blockSize,
-        useHarrisDetector,
-        k);
-
-    KLT klt(ref, corners);
+    findFeaturesInReference(refGray, corners);
 
     std::vector< std::vector<cv::Point2f> > trackedLocations;
-    std::vector< std::vector<uchar> > trackedStatus;
+    std::vector<uchar> status(corners.size(), true);
 
-    trackedLocations.push_back(klt.location());
-    trackedStatus.push_back(klt.status());
+    int frameCount = 0;
 
     cv::Mat f;
     while (vc.grab()) {
         vc.retrieve(f);
-        klt.update(f);
+       
+        std::vector<cv::Point2f> loc;
+        std::vector<uchar> s;
 
-        trackedLocations.push_back(klt.location());
-        trackedStatus.push_back(klt.status());
+        trackFeatures(ref, corners, f, loc, s);
+        for (size_t i = 0; i < s.size(); ++i) {
+            status[i] &= s[i];
+        }
+        trackedLocations.push_back(loc);
 
-        std::vector<cv::Point2f> &loc = klt.location();
-        std::vector<uchar> &status = klt.status();
+        ++frameCount;
 
         for (int i = 0; i < loc.size(); i++)
         {
@@ -131,6 +158,34 @@ int main(int argc, char **argv) {
                 cv::circle(f, loc[i], 2, cv::Scalar(0, 0, 255), -1, 8, 0);
             }
         }
+
+        Eigen::Matrix<double, 2, Eigen::Dynamic> image0 = toEight(trackedLocations[0]);
+        Eigen::Matrix<double, 2, Eigen::Dynamic> image1 = toEight(loc);
+
+        std::vector<Eigen::DenseIndex> inliers;
+        Eigen::Matrix3d F = eight::fundamentalMatrixRobust(image0, image1, inliers, 1.0);
+        Eigen::Matrix3d E = eight::essentialMatrix(k, F);
+
+        image0 = eight::selectColumnsByIndex(image0, inliers.begin(), inliers.end());
+        image1 = eight::selectColumnsByIndex(image1, inliers.begin(), inliers.end());
+
+        Eigen::Matrix<double, 3, 4> pose = eight::pose(E, k, image0, image1);
+        
+        Eigen::Matrix<double, 3, 4> cam0 = eight::cameraMatrix(k, Eigen::Matrix<double, 3, 4>::Identity());
+        Eigen::Matrix<double, 3, 4> cam1 = eight::cameraMatrix(k, pose);
+        Eigen::Matrix<double, 3, Eigen::Dynamic > points = eight::triangulateMany(cam0, cam1, image0, image1);
+
+
+        std::stringstream str;
+        str << "Frame_" << frameCount << ".xyz";
+
+        std::ofstream ofs(str.str());
+        for (Eigen::DenseIndex i = 0; i < points.cols(); ++i) {
+            ofs << points(0, i) << " " << points(1, i) << " " << points(2, i) << std::endl;
+        }
+
+        ofs.close();
+
 
         cv::imshow("f", f);
         cv::waitKey(60);

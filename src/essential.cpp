@@ -60,19 +60,29 @@ namespace eight {
         
         // Unhandled: triangulate does not work for points at infinity. How to handle these?
 
+        int bestId = 0;
+        int bestCount = 0;
         for (int i = 0 ; i < 4; ++i) {
 
             Eigen::Matrix<double, 3, 4> camSecond = cameraMatrix(k, camPosesSecond[i]);
 
-            Eigen::Vector3d p = triangulate(camFirst, camSecond, a.col(0), b.col(0));
-            Eigen::Vector3d pSecond = camSecond * p.colwise().homogeneous();
+            Eigen::Matrix<double, 3, Eigen::Dynamic> p = triangulateMany(camFirst, camSecond, a, b);
+            Eigen::Matrix<double, 3, Eigen::Dynamic> pSecond = camSecond * p.colwise().homogeneous();
         
-            if (p.z() >= 0.0 && pSecond.z() >= 0.0) {
-                return camPosesSecond[i];
+            int count = 0;
+            for (Eigen::DenseIndex j = 0; j < p.cols(); ++j) {
+                if (p(2, j) >= 0.0 && pSecond(2, j) >= 0.0) {
+                    ++count;                    
+                }
+            }
+            
+            if (count > bestCount) {
+                bestCount = count;
+                bestId = i;
             }
         }
         
-        return Eigen::Matrix<double, 3, 4>::Identity();
+        return camPosesSecond[bestId];
     }
     
 }
