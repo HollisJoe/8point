@@ -14,12 +14,14 @@ set(8POINT_LINK_TARGETS)
 set(8POINT_EIGEN_DIR "../eigen" CACHE PATH "Where is the include directory of Eigen located")
 if (WIN32)
   set(OpenCV_STATIC OFF)
-	set(OpenCV_SHARED ON)
+  set(OpenCV_SHARED ON)
 endif()
 find_package(OpenCV REQUIRED)
 
-include_directories(${OpenCV_INCLUDE_DIRS})
-list(APPEND 8POINT_LINK_TARGETS ${OpenCV_LIBRARIES})
+find_package(Ceres REQUIRED) 
+
+include_directories(${OpenCV_INCLUDE_DIRS} ${CERES_INCLUDE_DIRS})
+list(APPEND 8POINT_LINK_TARGETS ${OpenCV_LIBRARIES} ${CERES_LIBRARIES})
 
 include_directories(${CMAKE_CURRENT_BINARY_DIR} ${8POINT_EIGEN_DIR} "inc")
 

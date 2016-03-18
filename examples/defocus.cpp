@@ -21,6 +21,17 @@
 #include <opencv2/opencv.hpp>
 #include <fstream>
 
+#ifdef _WIN32
+#pragma warning(push)
+#pragma warning(disable : 4251 4355)
+#include <ceres/ceres.h>
+#pragma warning(pop)
+#else
+#include <ceres/ceres.h>
+#endif
+
+
+
 class KLT {
 public:
 
@@ -73,12 +84,12 @@ Eigen::MatrixXd toEight(const std::vector<cv::Point2f> &x) {
 }
 
 void findFeaturesInReference(cv::Mat &gray, std::vector<cv::Point2f> &corners) {
-    double qualityLevel = 0.005;
+    double qualityLevel = 0.01;
     double minDistance = 10;
-    int blockSize = 3;
-    bool useHarrisDetector = false;
+    int blockSize = 5;
+    bool useHarrisDetector = true;
     double k = 0.04;
-    int maxCorners = 1500;
+    int maxCorners = 500;
 
     cv::goodFeaturesToTrack(gray,
         corners,
