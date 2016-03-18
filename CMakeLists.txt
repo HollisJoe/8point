@@ -33,11 +33,13 @@ add_library(8point
     inc/eight/triangulate.h
     inc/eight/project.h
     inc/eight/select.h
+    inc/eight/structure.h
     src/fundamental.cpp
     src/essential.cpp
     src/normalize.cpp
     src/distance.cpp
     src/project.cpp
+    src/structure.cpp
 )
 
 add_executable(8point_tests
@@ -46,6 +48,7 @@ add_executable(8point_tests
     tests/test_pose.cpp
     tests/test_pose_outliers.cpp
     tests/test_triangulation.cpp
+    tests/test_structure.cpp
 )
 target_link_libraries(8point_tests 8point ${8POINT_LINK_TARGETS})
 
