@@ -57,12 +57,13 @@ public:
         std::swap(_prevStatus, _nextStatus);
 
         cv::cvtColor(img, _nextGray, CV_BGR2GRAY);
-        cv::calcOpticalFlowPyrLK(_prevGray, _nextGray, _prev, _next, _nextStatus, _err);
+        cv::TermCriteria term(cv::TermCriteria::COUNT+cv::TermCriteria::EPS, 50, 0.001);
+        cv::calcOpticalFlowPyrLK(_prevGray, _nextGray, _prev, _next, _nextStatus, _err, cv::Size(21, 21), 5, term);
 
         for (size_t i = 0; i < _nextStatus.size(); ++i) {
             _nextStatus[i] &= _prevStatus[i];
             _nextStatus[i] &= (_err[i] < 5);
-        }        
+        }
     }
 
     std::vector<cv::Point2f> &location() {
@@ -105,12 +106,12 @@ Eigen::MatrixXd imagePointsToRetinaPoints(const std::vector<cv::Point2f> &p, con
 }
 
 void findFeaturesInReference(cv::Mat &gray, std::vector<cv::Point2f> &corners) {
-    double qualityLevel = 0.05;
+    double qualityLevel = 0.02;
     double minDistance = 10;
     int blockSize = 5;
     bool useHarrisDetector = false;
     double k = 0.04;
-    int maxCorners = 500;
+    int maxCorners = 2000;
 
     cv::goodFeaturesToTrack(gray,
         corners,
@@ -120,7 +121,10 @@ void findFeaturesInReference(cv::Mat &gray, std::vector<cv::Point2f> &corners) {
         cv::Mat(),
         blockSize,
         useHarrisDetector,
-        k);    
+        k);
+    
+    cv::TermCriteria termcrit(CV_TERMCRIT_ITER|CV_TERMCRIT_EPS,20,0.03);
+    cv::cornerSubPix(gray, corners, cv::Size(10,10), cv::Size(-1,-1), termcrit);
 }
 
 void trackFeatures(cv::Mat ref, const std::vector<cv::Point2f> &refLocs, cv::Mat target, std::vector<cv::Point2f> &targetLocs, std::vector<uchar> &status)
@@ -142,7 +146,7 @@ struct GeneralReprojectionError {
         const T* const depth,
         T* residuals) const 
     {
-        T p[3] = {T(_np[0]) * depth[0], T(_np[1]) * depth[0], depth[0] };
+        T p[3] = {T(_np[0]) / depth[0], T(_np[1]) / depth[0], T(1.0) / depth[0] };
 
         T rpt[3] = {
             p[0] - camera[2] * p[1] + camera[1] * p[2] + camera[3],
@@ -150,8 +154,11 @@ struct GeneralReprojectionError {
             -p[0] * camera[1] + p[1] * camera[0] + p[2] + camera[5]
         };
         
-        residuals[0] = rpt[0] / rpt[2] - T(_no[0]);
-        residuals[1] = rpt[1] / rpt[2] - T(_no[1]);
+        //residuals[0] = rpt[0] / rpt[2] - T(_no[0]);
+        //residuals[1] = rpt[1] / rpt[2] - T(_no[1]);
+        
+        residuals[0] = T(_no[0]) - rpt[0] / rpt[2] ;
+        residuals[1] = T(_no[1]) - rpt[1] / rpt[2] ;
 
         return true;
     }
@@ -170,6 +177,38 @@ void normalizePerspective(Eigen::Matrix<double, 3, Eigen::Dynamic> &x) {
     for (Eigen::DenseIndex i = 0; i < x.cols(); ++i) {
         x.col(i) /= x.col(i).z();
     }
+}
+
+void writePly(const char *path, const Eigen::MatrixXd &points, const Eigen::MatrixXd &colors, const std::vector<uchar> &status) {
+    std::ofstream ofs(path);
+    
+    size_t valid = std::count(status.begin(), status.end(), 1);
+    
+    ofs
+        << "ply" << std::endl
+        << "format ascii 1.0" << std::endl
+        << "element vertex " << valid << std::endl
+        << "property float x" << std::endl
+        << "property float y" << std::endl
+        << "property float z" << std::endl
+        << "property uchar red" << std::endl
+        << "property uchar green" << std::endl
+        << "property uchar blue" << std::endl
+        << "end_header" << std::endl;
+    
+    
+    for (Eigen::DenseIndex i = 0; i < points.cols(); ++i) {
+        if (!status[i])
+            continue;
+        
+        Eigen::Vector3d x = points.col(i);
+        Eigen::Vector3d c = colors.col(i);
+        
+        ofs << x(0) << " " << x(1) << " " << x(2) << " " << (int)c(0) << " " << (int)c(1) << " " << (int)c(2) << std::endl;
+    }
+    
+    ofs.close();
+
 }
 
 int main(int argc, char **argv) {
@@ -235,7 +274,7 @@ int main(int argc, char **argv) {
         cv::waitKey(10);
     }
     
-    retinapoints[0].row(2).setConstant(100.0); // Initial depth
+    retinapoints[0].row(2).setConstant(0.01); // Initial inverse depth
 
     // Setup camera parameters
     Eigen::MatrixXd camparams(6, retinapoints.size());
@@ -276,19 +315,26 @@ int main(int argc, char **argv) {
     std::cout << summary.FullReport() << "\n";
     
 
-    std::ofstream ofs("points.xyz");
+    Eigen::MatrixXd colors(3, retinapoints[0].cols());
+    Eigen::MatrixXd points(3, retinapoints[0].cols());
     for (Eigen::DenseIndex i = 0; i < retinapoints[0].cols(); ++i) {
         if (!status[i])
             continue;
 
         Eigen::Vector3d x = retinapoints[0].col(i);
-
-        ofs << x(0) * x.z() << " " << x(1) * x.z() << " " << x.z() << std::endl;
+        x.x() /= x.z();
+        x.y() /= x.z();
+        x.z() = 1.0 / x.z();
+        
+        points.col(i) = x;
+        
+        cv::Vec3b c = ref.at<cv::Vec3b>(corners[i]);
+        colors(0, i) = c(2);
+        colors(1, i) = c(1);
+        colors(2, i) = c(0);
     }
-    ofs.close();
 
-    std::cout << camparams.col(1) << std::endl;
-
+    writePly("points.ply", points, colors, status);
 
 
     
