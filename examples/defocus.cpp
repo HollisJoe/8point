@@ -36,6 +36,8 @@
 #include <glog/logging.h>
 #endif
 
+#include "../tests/utils.h"
+
 
 
 class KLT {
@@ -59,6 +61,7 @@ public:
 
         for (size_t i = 0; i < _nextStatus.size(); ++i) {
             _nextStatus[i] &= _prevStatus[i];
+            _nextStatus[i] &= (_err[i] < 5);
         }        
     }
 
@@ -102,7 +105,7 @@ Eigen::MatrixXd imagePointsToRetinaPoints(const std::vector<cv::Point2f> &p, con
 }
 
 void findFeaturesInReference(cv::Mat &gray, std::vector<cv::Point2f> &corners) {
-    double qualityLevel = 0.01;
+    double qualityLevel = 0.05;
     double minDistance = 10;
     int blockSize = 5;
     bool useHarrisDetector = false;
@@ -130,51 +133,44 @@ void trackFeatures(cv::Mat ref, const std::vector<cv::Point2f> &refLocs, cv::Mat
 
 struct GeneralReprojectionError {
     GeneralReprojectionError(const double *no, const double *np)
-        : _no(no), _np(np) 
+        : _no(no), _np(np)
     {}
 
     template <typename T>
     bool operator()(
         const T* const camera,
-        const T* const inverseDepth,
+        const T* const depth,
         T* residuals) const 
     {
+        T p[3] = {T(_np[0]) * depth[0], T(_np[1]) * depth[0], depth[0] };
 
-        T p[3] = { _np[0] / inverseDepth[0], _np[1] / inverseDepth[0], _np[2] / inverseDepth[0] };
-
-        const T a[2] = {
-            p[0] - camera[2] * p[1] + camera[1],
-            p[1] - camera[0] + camera[2] * p[0]
+        T rpt[3] = {
+            p[0] - camera[2] * p[1] + camera[1] * p[2] + camera[3],
+            p[0] * camera[2] + p[1] - camera[0] * p[2] + camera[4],
+            -p[0] * camera[1] + p[1] * camera[0] + p[2] + camera[5]
         };
-
-        const T c = -camera[1] * p[0] + camera[0] * p[1] + T(1);
-
-        const T e[2] = {
-            _no[0] * c - a[0],
-            _no[1] * c - a[1]
-        };
-
-
-        const T f[2] = {
-            _no[0] * camera[5] - camera[3],
-            _no[1] * camera[5] - camera[4]
-        };
-
-        residuals[0] = (e[0] + f[0] * inverseDepth[0]) / (c + camera[5] * inverseDepth[0]);
-        residuals[1] = (e[1] + f[1] * inverseDepth[0]) / (c + camera[5] * inverseDepth[0]);
+        
+        residuals[0] = rpt[0] / rpt[2] - T(_no[0]);
+        residuals[1] = rpt[1] / rpt[2] - T(_no[1]);
 
         return true;
     }
 
-    static ceres::CostFunction* Create(const double *observed, const double *point)
+    static ceres::CostFunction* Create(const double *no, const double *np)
     {
         return (new ceres::AutoDiffCostFunction<GeneralReprojectionError, 2, 6, 1>(
-            new GeneralReprojectionError(observed, point)));
+            new GeneralReprojectionError(no, np)));
     }
 
     const double *_no;
     const double *_np;
 };
+
+void normalizePerspective(Eigen::Matrix<double, 3, Eigen::Dynamic> &x) {
+    for (Eigen::DenseIndex i = 0; i < x.cols(); ++i) {
+        x.col(i) /= x.col(i).z();
+    }
+}
 
 int main(int argc, char **argv) {
 
@@ -208,22 +204,14 @@ int main(int argc, char **argv) {
     vc >> ref;
     cv::cvtColor(ref, refGray, CV_BGR2GRAY);
 
-    std::cout << __LINE__ << std::endl;
     std::vector< Eigen::MatrixXd > retinapoints;
     std::vector<cv::Point2f> corners;
     
-    std::cout << __LINE__ << std::endl;
     findFeaturesInReference(refGray, corners);
     std::vector<uchar> status(corners.size(), 1);
     
-    std::cout << __LINE__ << std::endl;
     retinapoints.push_back(imagePointsToRetinaPoints(corners, invk));
 
-    std::cout << __LINE__ << std::endl;
-    
-    
-
-    int frameCount = 0;
 
     cv::Mat f;
     while (vc.grab()) {
@@ -233,7 +221,7 @@ int main(int argc, char **argv) {
         std::vector<uchar> s;
 
         trackFeatures(ref, corners, f, loc, s);
-
+        
         retinapoints.push_back(imagePointsToRetinaPoints(loc, invk));
         for (size_t i = 0; i < s.size(); ++i) {
             status[i] &= s[i];
@@ -247,18 +235,7 @@ int main(int argc, char **argv) {
         cv::waitKey(10);
     }
     
-    std::cout << __LINE__ << std::endl;
-
-    std::uniform_real_distribution<double> dist(10.0, 20.0);
-    std::default_random_engine re;
-    std::vector<double> idepths(status.size(), 10.0);
-
-    /*
-    for (size_t i = 0; i < status.size(); ++i) {
-        idepths.push_back(1.0 / dist(re));
-    }*/
-
-    std::copy(idepths.begin(), idepths.end(), std::ostream_iterator<double>(std::cout, ","));
+    retinapoints[0].row(2).setConstant(100.0); // Initial depth
 
     // Setup camera parameters
     Eigen::MatrixXd camparams(6, retinapoints.size());
@@ -278,19 +255,15 @@ int main(int argc, char **argv) {
                 retinapoints[f].col(p).data(),
                 retinapoints[0].col(p).data()
             );
+            
 
             problem.AddResidualBlock(
                 cost_function,
                 NULL /* squared loss */,
                 camparams.col(f).data(),
-                &idepths[p]);
+                retinapoints[0].col(p).data() + 2);
         }
-
-        
-
     }
-
-    std::cout << __LINE__ << std::endl;
 
 
     ceres::Solver::Options options;
@@ -301,19 +274,20 @@ int main(int argc, char **argv) {
     ceres::Solver::Summary summary;
     ceres::Solve(options, &problem, &summary);
     std::cout << summary.FullReport() << "\n";
+    
 
     std::ofstream ofs("points.xyz");
     for (Eigen::DenseIndex i = 0; i < retinapoints[0].cols(); ++i) {
         if (!status[i])
             continue;
 
-        Eigen::Vector3d x = retinapoints[0].col(i) * idepths[i];
+        Eigen::Vector3d x = retinapoints[0].col(i);
 
-        ofs << x(0) << " " << x(1) << " " << x(2) << std::endl;
+        ofs << x(0) * x.z() << " " << x(1) * x.z() << " " << x.z() << std::endl;
     }
     ofs.close();
 
-    std::cout << camparams.col(0) << std::endl;
+    std::cout << camparams.col(1) << std::endl;
 
 
 
