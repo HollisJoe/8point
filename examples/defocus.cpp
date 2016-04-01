@@ -22,6 +22,8 @@
 #include <fstream>
 #include <random>
 
+#include <Eigen/Sparse>
+
 #ifdef _WIN32
 #define GOOGLE_GLOG_DLL_DECL
 #pragma warning(push)
@@ -154,9 +156,6 @@ struct GeneralReprojectionError {
             -p[0] * camera[1] + p[1] * camera[0] + p[2] + camera[5]
         };
         
-        //residuals[0] = rpt[0] / rpt[2] - T(_no[0]);
-        //residuals[1] = rpt[1] / rpt[2] - T(_no[1]);
-        
         residuals[0] = T(_no[0]) - rpt[0] / rpt[2] ;
         residuals[1] = T(_no[1]) - rpt[1] / rpt[2] ;
 
@@ -208,6 +207,94 @@ void writePly(const char *path, const Eigen::MatrixXd &points, const Eigen::Matr
     }
     
     ofs.close();
+}
+
+void dense(cv::Mat &depths, cv::Mat &colors) {
+    // Variational with energy: (dout - dsparse)^2 + lambda * |nabla(dout)|^2
+    // First term is only defined for sparse pixel positions.
+    // leads to linear system of equations: Ax = b with one row per pixel: 
+    //  dout(x,y) + lambda * laplacian(dout(x,y)) = dsparse(x,y)
+    //  dout(x,y) + lambda * (-4*dout(x,y) + dout(x,y-1) + dout(x+1,y) + dout(x,y+1) + dout(x-1,y)) = dsparse(x,y)
+
+
+    typedef Eigen::Triplet<double> T;
+    std::vector<T> triplets;
+
+    std::cout << __LINE__ << std::endl;
+
+    int rows = depths.rows;
+    int cols = depths.cols;
+
+    Eigen::MatrixXd rhs(rows * cols, 1);
+    rhs.setZero();
+
+    std::cout << __LINE__ << std::endl;
+
+    const double lambda = 0.1;
+
+    int idx = 0;
+    for (int y = 0; y < depths.rows; ++y) {
+        for (int x = 0; x < depths.cols; ++x, ++idx) {
+
+            double d = depths.at<double>(y, x);
+            
+            double c = 0.0;
+
+            if (d > 0.0) {
+                rhs(idx, 0) = d;
+                c += 1.0;
+            }
+            
+
+            if (y > 0) {
+                // North neighbor 
+                c -= lambda;
+                triplets.push_back(T(idx, (y - 1)*cols + x, lambda));
+            }
+
+            if (x > 0) {
+                // West neighbor 
+                c -= lambda;
+                triplets.push_back(T(idx, (y)*cols + (x-1), lambda));
+            }
+
+            if (y < (rows - 1)) {
+                // South neighbor 
+                c -= lambda;
+                triplets.push_back(T(idx, (y+1)*cols + x, lambda));
+            }
+
+            if (x < (cols - 1)) {
+                // East neighbor 
+                c -= lambda;
+                triplets.push_back(T(idx, (y)*cols + (x+1), lambda));
+            }
+
+            // Center
+            triplets.push_back(T(idx, idx, c));
+        }
+    }
+
+    std::cout << __LINE__ << std::endl;
+
+    Eigen::SparseMatrix<double> A(rows*cols, rows*cols);
+    A.setFromTriplets(triplets.begin(), triplets.end());
+
+    std::cout << __LINE__ << std::endl;
+
+    Eigen::SparseLU< Eigen::SparseMatrix<double> > solver;
+    solver.analyzePattern(A);
+    solver.factorize(A);
+
+    Eigen::MatrixXd result(rows*cols, 1);
+    result = solver.solve(rhs);
+
+    idx = 0;
+    for (int y = 0; y < depths.rows; ++y) {
+        for (int x = 0; x < depths.cols; ++x, ++idx) {
+            depths.at<double>(y, x) = result(idx, 0);
+        }
+    }
 
 }
 
@@ -270,11 +357,14 @@ int main(int argc, char **argv) {
             }
         }
         
-        cv::imshow("track", f);
+        cv::Mat tmp;
+        cv::resize(f, tmp, cv::Size(), 0.5, 0.5);
+        cv::imshow("track", tmp);
         cv::waitKey(10);
     }
     
-    retinapoints[0].row(2).setConstant(0.01); // Initial inverse depth
+    retinapoints[0].row(2).setRandom(); // Initial inverse depth
+    retinapoints[0].row(2).array() += 1.0;
 
     // Setup camera parameters
     Eigen::MatrixXd camparams(6, retinapoints.size());
@@ -314,28 +404,48 @@ int main(int argc, char **argv) {
     ceres::Solve(options, &problem, &summary);
     std::cout << summary.FullReport() << "\n";
     
+    cv::Mat depths(ref.size(), CV_64FC1);
+    depths.setTo(0);
 
     Eigen::MatrixXd colors(3, retinapoints[0].cols());
     Eigen::MatrixXd points(3, retinapoints[0].cols());
-    for (Eigen::DenseIndex i = 0; i < retinapoints[0].cols(); ++i) {
+    Eigen::DenseIndex i = 0;
+
+    for (Eigen::DenseIndex i = 0; i < retinapoints[0].cols(); ++i) {           
         if (!status[i])
             continue;
 
-        Eigen::Vector3d x = retinapoints[0].col(i);
-        x.x() /= x.z();
-        x.y() /= x.z();
-        x.z() = 1.0 / x.z();
-        
-        points.col(i) = x;
-        
+        Eigen::Vector3d q = retinapoints[0].col(i);
+        q.x() /= q.z();
+        q.y() /= q.z();
+        q.z() = 1.0 / q.z();
+
+        points.col(i) = q;
+
         cv::Vec3b c = ref.at<cv::Vec3b>(corners[i]);
         colors(0, i) = c(2);
         colors(1, i) = c(1);
         colors(2, i) = c(0);
-    }
 
+            
+        depths.at<double>(corners[i]) = q.z();
+    }
     writePly("points.ply", points, colors, status);
 
+    dense(depths, ref);    
 
-    
+    double minv, maxv;
+    cv::minMaxLoc(depths, &minv, &maxv);
+
+    cv::Mat tmp;
+    depths.convertTo(tmp, CV_8U, 255.0 / (maxv - minv), -minv * 255.0 / (maxv - minv));
+    cv::resize(tmp, tmp, cv::Size(), 0.5, 0.5);
+    cv::imshow("dense", tmp);
+    cv::waitKey();
+
+
+    //cv::FileStorage file("sparse.yml", cv::FileStorage::WRITE);
+    //file << ref;
+    //file << depths;
+
 }
